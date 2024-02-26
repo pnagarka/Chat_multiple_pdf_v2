@@ -108,7 +108,7 @@ def main():
     st.set_page_config("Chat with multiple PDF")
     st.header("Chat with PDF using Gemini💁")
 
-    pdf_folder = "path/to/your/pdf/folder"  # Update this with the path to your PDF folder
+    pdf_folder = "/Users/aayushaggarwal/Desktop/Gemini_internship/pdf_folder"  # Update this with the path to your PDF folder
 
     user_question = st.text_input("Ask a Question from the PDF Files")
 
