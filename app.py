@@ -108,12 +108,35 @@ def main():
     st.set_page_config("Chat with multiple PDF")
     st.header("Chat with PDF using Gemini💁")
 
-    pdf_folder = "/Users/aayushaggarwal/Desktop/Gemini_internship/pdf_folder"  # Update this with the path to your PDF folder
+    pdf_folder = "path/to/your/pdf/folder"  # Update this with the path to your PDF folder
 
     user_question = st.text_input("Ask a Question from the PDF Files")
 
     if user_question:
-        user_input(user_question, pdf_folder)
+        # Use the new get_pdf function to read PDFs from the specified folder
+        raw_text = get_pdf(pdf_folder)
+
+        # Process the text and generate embeddings
+        text_chunks = get_text_chunks(raw_text)
+        get_vector_store(text_chunks)
+
+        # Perform similarity search and get a response from the conversational chain
+        embeddings = GoogleGenerativeAIEmbeddings(model='models/embedding-001')
+        new_db = FAISS.load_local('faiss_index', embeddings)
+        docs = new_db.similarity_search(user_question)
+
+        chain = get_conversational_chain()
+        response = chain(
+            {'input_documents': docs, 'question': user_question},
+            return_only_outputs=True
+        )
+
+        # Save the question and answer to the CSV file
+        save_to_csv(user_question, response['output_text'])
+
+        # Display the response in the Streamlit app
+        st.write('Reply:', response['output_text'])
+
 
 def save_to_csv_on_close():
     if store_data:
