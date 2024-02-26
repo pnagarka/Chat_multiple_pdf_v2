@@ -1,0 +1,20 @@
+#
+# Author: Lasse Collin
+#
+# This file has been put into the public domain.
+# You can do whatever you want with this file.
+#
+
+prefix=/Users/aayushaggarwal/Desktop/Gemini_internship/venv1
+exec_prefix=/Users/aayushaggarwal/Desktop/Gemini_internship/venv1
+libdir=/Users/aayushaggarwal/Desktop/Gemini_internship/venv1/lib
+includedir=/Users/aayushaggarwal/Desktop/Gemini_internship/venv1/include
+
+Name: liblzma
+Description: General purpose data compression library
+URL: https://tukaani.org/xz/
+Version: 5.4.5
+Cflags: -I${includedir}
+Cflags.private: -DLZMA_API_STATIC
+Libs: -L${libdir} -llzma
+Libs.private: -pthread -lpthread

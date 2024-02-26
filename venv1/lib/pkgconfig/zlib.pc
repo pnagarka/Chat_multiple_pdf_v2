@@ -1,0 +1,13 @@
+prefix=/Users/aayushaggarwal/Desktop/Gemini_internship/venv1
+exec_prefix=/Users/aayushaggarwal/Desktop/Gemini_internship/venv1
+libdir=/Users/aayushaggarwal/Desktop/Gemini_internship/venv1/lib
+sharedlibdir=/Users/aayushaggarwal/Desktop/Gemini_internship/venv1/lib
+includedir=/Users/aayushaggarwal/Desktop/Gemini_internship/venv1/include
+
+Name: zlib
+Description: zlib compression library
+Version: 1.2.13
+
+Requires:
+Libs: -L${libdir} -L${sharedlibdir} -lz
+Cflags: -I${includedir}
