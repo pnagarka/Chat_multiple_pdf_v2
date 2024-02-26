@@ -2,8 +2,6 @@ import streamlit as st
 from PyPDF2 import PdfReader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 import os
-import csv
-import datetime
 from langchain_google_genai import GoogleGenerativeAIEmbeddings
 import google.generativeai as genai
 from langchain.vectorstores import FAISS
@@ -11,10 +9,14 @@ from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.chains.question_answering import load_qa_chain
 from langchain.prompts import PromptTemplate
 from dotenv import load_dotenv
+import csv
+import datetime
 
 load_dotenv()
-
 genai.configure(api_key=os.getenv('GOOGLE_API_KEY'))
+
+# Global variable to track whether CSV file has been created during the current session
+csv_file_created = False
 
 def get_pdf(pdf_folder):
     text = ""
@@ -32,12 +34,11 @@ def get_text_chunks(text):
     return chunks
 
 def get_vector_store(text_chunks):
-    embeddings  = GoogleGenerativeAIEmbeddings(model = 'models/embedding-001')
-    vector_stores = FAISS.from_texts(text_chunks,embedding=embeddings)
+    embeddings = GoogleGenerativeAIEmbeddings(model='models/embedding-001')
+    vector_stores = FAISS.from_texts(text_chunks, embedding=embeddings)
     vector_stores.save_local('faiss_index')
 
 def get_conversational_chain():
-
     prompt_template = """
     Answer the question as detailed as possible from the provided context, make sure to provide all the details, if the answer is not in
     provided context just say, "answer is not available in the context", don't provide the wrong answer\n\n
@@ -46,81 +47,42 @@ def get_conversational_chain():
 
     Answer:
     """
-    model = ChatGoogleGenerativeAI(model='gemini-pro',temperature=0.3)
-
-    prompt = PromptTemplate(template=prompt_template,input_variables=['context','question'])
-    chain = load_qa_chain(model,chain_type='stuff',prompt=prompt)
+    model = ChatGoogleGenerativeAI(model='gemini-pro', temperature=0.3)
+    prompt = PromptTemplate(template=prompt_template, input_variables=['context', 'question'])
+    chain = load_qa_chain(model, chain_type='stuff', prompt=prompt)
     return chain
 
+def save_to_csv(question, answer, csv_file_path='responses.csv'):
+    global csv_file_created
 
-store_data=[]
+    if not csv_file_created:
+        os.makedirs('responses', exist_ok=True)
+        csv_file_path = os.path.join('responses', csv_file_path)
 
-def save_to_csv(question, answer, csv_folder='responses'):
-    store_data.append({'Question': question, 'Answer': answer})
+        with open(csv_file_path, mode='a', newline='') as file:
+            writer = csv.writer(file)
+            if os.path.getsize(csv_file_path) == 0:
+                writer.writerow(['Question', 'Answer'])  # Write header only if the file is new
 
-    # Create a folder if it doesn't exist
-    os.makedirs(csv_folder, exist_ok=True)
+        csv_file_created = True  # Set the flag to True after creating the CSV file
 
-    # Generate the current date and time as a string
-    current_datetime = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-
-    # Create a CSV file with the current date and time as the name
-    csv_file_path = os.path.join(csv_folder, f'responses_{current_datetime}.csv')
-
-    # Check if the CSV file exists
-    is_new_file = not os.path.exists(csv_file_path)
-
-    # Write the question and answer to the CSV file
     with open(csv_file_path, mode='a', newline='') as file:
         writer = csv.writer(file)
-        if is_new_file:
-            writer.writerow(['Question', 'Answer'])  # Write header only if the file is new
         writer.writerow([question, answer])
 
-
-
-def user_input(user_question, pdf_folder):
-    # Use the new get_pdf function to read PDFs from the specified folder
-    raw_text = get_pdf(pdf_folder)
-
-    # Process the text and generate embeddings
-    text_chunks = get_text_chunks(raw_text)
-    get_vector_store(text_chunks)
-
-    # Perform similarity search and get a response from the conversational chain
-    embeddings = GoogleGenerativeAIEmbeddings(model='models/embedding-001')
-    new_db = FAISS.load_local('faiss_index', embeddings)
-    docs = new_db.similarity_search(user_question)
-
-    chain = get_conversational_chain()
-    response = chain(
-        {'input_documents': docs, 'question': user_question},
-        return_only_outputs=True
-    )
-
-    # Save the question and answer to the CSV file
-    save_to_csv(user_question, response['output_text'])
-
-    # Display the response in the Streamlit app
-    st.write('Reply', response['output_text'])
-
 def main():
-    st.set_page_config("Chat with multiple PDF")
-    st.header("Chat with PDF using Gemini💁")
+    st.set_page_config("Chat with PDF using Gemini💁")
+    st.title("Chat with PDF using Gemini💁")
 
     pdf_folder = "/Users/aayushaggarwal/Desktop/Gemini_internship/pdf_folder"  # Update this with the path to your PDF folder
 
     user_question = st.text_input("Ask a Question from the PDF Files")
 
-    if user_question:
-        # Use the new get_pdf function to read PDFs from the specified folder
+    if st.button("Get Reply"):
         raw_text = get_pdf(pdf_folder)
-
-        # Process the text and generate embeddings
         text_chunks = get_text_chunks(raw_text)
         get_vector_store(text_chunks)
 
-        # Perform similarity search and get a response from the conversational chain
         embeddings = GoogleGenerativeAIEmbeddings(model='models/embedding-001')
         new_db = FAISS.load_local('faiss_index', embeddings)
         docs = new_db.similarity_search(user_question)
@@ -131,25 +93,9 @@ def main():
             return_only_outputs=True
         )
 
-        # Save the question and answer to the CSV file
         save_to_csv(user_question, response['output_text'])
 
-        # Display the response in the Streamlit app
         st.write('Reply:', response['output_text'])
 
-
-def save_to_csv_on_close():
-    if store_data:
-        os.makedirs('responses', exist_ok=True)
-        current_datetime = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
-        csv_file_path = os.path.join('responses', f'responses_{current_datetime}.csv')
-
-        with open(csv_file_path, mode='w', newline='') as file:
-            writer = csv.writer(file)
-            writer.writerow(['Question', 'Answer'])
-            for data in store_data:
-                writer.writerow([data['Question'], data['Answer']])
-
-    # No need for the file uploader and processing button in this version
-
-
+if __name__ == "__main__":
+    main()
