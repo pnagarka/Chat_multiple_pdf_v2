@@ -2,9 +2,10 @@ import streamlit as st
 from dotenv import load_dotenv
 from PyPDF2 import PdfReader
 from langchain.text_splitter import CharacterTextSplitter
-from langchain.embeddings import OpenAIEmbeddings, HuggingFaceInstructEmbeddings
-from langchain.vectorstores import FAISS
-from langchain.chat_models import ChatOpenAI
+from langchain_community.embeddings import OpenAIEmbeddings, HuggingFaceInstructEmbeddings
+#from langchain.vectorstores import FAISS
+from langchain_community.vectorstores import FAISS
+from langchain_community.chat_models import ChatOpenAI
 from langchain.memory import ConversationBufferMemory
 from langchain.chains import ConversationalRetrievalChain
 from htmlTemplates import css, bot_template, user_template
@@ -54,20 +55,33 @@ def get_conversation_chain(vectorstore):
 
 
 def handle_userinput(user_question):
+    # Ensure the conversation function is initialized in the session state
+    if "conversation" not in st.session_state:
+        # Initialize it here or ensure it's done in the main setup
+        pass 
+
+    # Get the response for the current user question
     response = st.session_state.conversation({'question': user_question})
 
+    # Initialize chat history if not already done
     if "chat_history" not in st.session_state or st.session_state.chat_history is None:
         st.session_state.chat_history = []
+        st.session_state.last_displayed_msg_index = -1  # Initialize the index
 
+    # Extend the chat history with the new response
     st.session_state.chat_history.extend(response['chat_history'])
 
-    for i, message in enumerate(st.session_state.chat_history):
-        if i % 2 == 0:
-            st.write(user_template.replace(
-                "{{MSG}}", message.content), unsafe_allow_html=True)
+    # Display messages that have not been displayed yet
+    for i in range(st.session_state.last_displayed_msg_index + 1, len(st.session_state.chat_history)):
+        message = st.session_state.chat_history[i]
+        if i % 2 == 0:  # Assuming even indices are user messages, odd indices are bot responses
+            st.write(user_template.replace("{{MSG}}", message.content), unsafe_allow_html=True)
         else:
-            st.write(bot_template.replace(
-                "{{MSG}}", message.content), unsafe_allow_html=True)
+            st.write(bot_template.replace("{{MSG}}", message.content), unsafe_allow_html=True)
+    
+    # Update the index of the last displayed message
+    st.session_state.last_displayed_msg_index = len(st.session_state.chat_history) - 1
+
 
 
 def save_to_csv(question, answer, csv_file_path='responses.csv'):
@@ -90,27 +104,32 @@ def save_to_csv(question, answer, csv_file_path='responses.csv'):
         writer.writerow([question, answer])
 
 
+
 def main():
     load_dotenv()
-    st.set_page_config(page_title="Chat with multiple PDFs",
-                       page_icon=":books:")
+    st.set_page_config(page_title="Chat with multiple PDFs", page_icon=":books:")
     st.write(css, unsafe_allow_html=True)
 
-    if "conversation" not in st.session_state:
-        st.session_state.conversation = None
-    if "chat_history" not in st.session_state:
-        st.session_state.chat_history = None
+    if "conversation" not in st.session_state or "vectorstore" not in st.session_state:
+        st.header("Chat with multiple PDFs :books:")
+        pdf_directory = "C:/Users/15516/OneDrive/Desktop/GLOBAL_AI/Chat_multiple_pdf_v2/Chat_multiple_pdf_v2/pdf_folder"  # Replace with the path to your PDF directory
+        pdf_docs = [os.path.join(pdf_directory, file) for file in os.listdir(pdf_directory) if file.endswith(".pdf")]
         
-    st.header("Chat with multiple PDFs :books:")
-    pdf_directory = "/Users/aayushaggarwal/Desktop/Gemini_internship/pdf_folder"  # Replace with the path to your PDF directory
-    pdf_docs = [os.path.join(pdf_directory, file) for file in os.listdir(pdf_directory) if file.endswith(".pdf")]
+        # Process PDFs
+        raw_text = get_pdf_text(pdf_docs)
+        text_chunks = get_text_chunks(raw_text)
         
-    # Process PDFs
-    raw_text = get_pdf_text(pdf_docs)
-    text_chunks = get_text_chunks(raw_text)
-    vectorstore = get_vectorstore(text_chunks)
-    conversation_chain = get_conversation_chain(vectorstore)
-    st.session_state.conversation = conversation_chain
+        # Only create vectorstore if it doesn't exist
+        if "vectorstore" not in st.session_state:
+            vectorstore = get_vectorstore(text_chunks)
+            st.session_state.vectorstore = vectorstore
+        else:
+            vectorstore = st.session_state.vectorstore
+        
+        conversation_chain = get_conversation_chain(vectorstore)
+        st.session_state.conversation = conversation_chain
+    else:
+        st.header("Chat with multiple PDFs :books:")
 
     user_question = st.text_input("Ask a question about your documents:")
 
@@ -118,5 +137,6 @@ def main():
         # Handle user input
         handle_userinput(user_question)
         save_to_csv(user_question, st.session_state.chat_history)
+
 if __name__ == '__main__':
     main()
